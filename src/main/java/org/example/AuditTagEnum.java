@@ -15,12 +15,12 @@ public enum AuditTagEnum {
     HATE_THREATENING("hate_threatening"),
     VIOLENCE_GRAPHIC("violence_graphic"),
     SELFHARM_INTENT("selfharm_intent"),
-    SELFHARM_INSTRUCTIONS("selfharm_instrcutions"),
+    SELFHARM_INSTRUCTIONS("selfharm_instructions"),
     HARASSMENT_THREATENING("harassment_threatening"),
-    VIOLENCE("violence"),;
-
+    VIOLENCE("violence");
 
     private String tag;
+
     @JsonCreator
     public static AuditTagEnum parseOfNullable(String tag) {
         for (AuditTagEnum item : values()) {
@@ -30,5 +30,4 @@ public enum AuditTagEnum {
         }
         return null;
     }
-
 }

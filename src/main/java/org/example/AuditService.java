@@ -6,12 +6,29 @@ import jdk.jfr.Category;
 import okhttp3.*;
 
 import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import com.google.gson.Gson;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.sql.Connection;
+
+@Service
 public class AuditService {
+
+    @Autowired
+    private TdAuditResponseService tdAuditResponseService;
+
+    @Autowired
+    private TdAuditResultService tdAuditResultService;
+
+    @Autowired
+    private TdAuditRequestMapper tdAuditRequestMapper;
+
     private static final Gson gson = new Gson();
     public AuditResultRsp audit(AuditInputReq request) {
         // 获取内容审核结果
@@ -34,7 +51,7 @@ public class AuditService {
 
         // 处理审核标签
         List<AuditTagEnum> tags = this.setTags(
-                moderationDto.getResults().get(0).getCategories(),
+                (Categorie) moderationDto.getResults().get(0).getCategories(),
                 auditResponse
         );
 
@@ -63,6 +80,24 @@ public class AuditService {
 
         // 返回结果响应
         return auditResultRsp;
+    }
+
+    public void save(TdAuditRequest auditRequest) {
+        String insertSQL = "INSERT INTO td_audit_request (user_id, input, create_time) VALUES (?, ?, ?)";
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement preparedStatement = ((java.sql.Connection) connection).prepareStatement(insertSQL)) {
+
+            preparedStatement.setLong(1, auditRequest.getUserId());
+            preparedStatement.setString(2, auditRequest.getInput());
+            preparedStatement.setTimestamp(3, java.sql.Timestamp.valueOf(auditRequest.getCreateTime()));
+
+            preparedStatement.executeUpdate();
+            System.out.println("AuditRequest saved to PostgreSQL");
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
     private ModerationDto getModeration(AuditInputReq request) {
         OkHttpClient client = new OkHttpClient.Builder()
@@ -98,73 +133,72 @@ public class AuditService {
     private List<AuditTagEnum> setTags(Categorie categorie, TdAuditResponse auditResponse) {
         List<AuditTagEnum> tags = new ArrayList<>();
 
-        if (categorie.getHarassment()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getHarassment().getClass().getName()));
+        if (categorie.isHarassment()) {
+            tags.add(AuditTagEnum.parseOfNullable("Harassment"));
             auditResponse.setHarassment(1);
         }
 
-        if (categorie.getSelfHarm()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getSelfHarm().getClass().getName()));
-            auditResponse.setSelfharm(1);
+        if (categorie.isSelfHarm()) {
+            tags.add(AuditTagEnum.parseOfNullable("SelfHarm"));
+            auditResponse.setSelfHarm(1);
         }
 
-        if (categorie.getSexualMinors()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getSexualMinors().getClass().getName()));
+        if (categorie.isSexualMinors()) {
+            tags.add(AuditTagEnum.parseOfNullable("SexualMinors"));
             auditResponse.setSexualMinors(1);
         }
 
-        if (categorie.getHateThreatening()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getHateThreatening().getClass().getName()));
+        if (categorie.isHateThreatening()) {
+            tags.add(AuditTagEnum.parseOfNullable("HateThreatening"));
             auditResponse.setHarassmentThreatening(1);
         }
 
-        if (categorie.getViolenceGraphic()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getViolenceGraphic().getClass().getName()));
+        if (categorie.isViolenceGraphic()) {
+            tags.add(AuditTagEnum.parseOfNullable("ViolenceGraphic"));
             auditResponse.setViolenceGraphic(1);
         }
 
-        if (categorie.getSelfHarmIntent()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getSelfHarmIntent().getClass().getName()));
-            auditResponse.setSelfharmIntent(1);
+        if (categorie.isSelfHarmIntent()) {
+            tags.add(AuditTagEnum.parseOfNullable("SelfHarmIntent"));
+            auditResponse.setSelfHarmIntent(1);
         }
 
-        if (categorie.getSelfHarmInstructions()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getSelfHarmInstructions().getClass().getName()));
-            auditResponse.setSelfharmInstructions(1);
+        if (categorie.isSelfHarmInstructions()) {
+            tags.add(AuditTagEnum.parseOfNullable("SelfHarmInstructions"));
+            auditResponse.setSelfHarmInstructions(1);
         }
 
-        if (categorie.getHarassmentThreatening()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getHarassmentThreatening().getClass().getName()));
+        if (categorie.isHarassmentThreatening()) {
+            tags.add(AuditTagEnum.parseOfNullable("HarassmentThreatening"));
             auditResponse.setHarassmentThreatening(1);
         }
 
-        if (categorie.getViolence()) {
-            tags.add(AuditTagEnum.parseOfNullable(categorie.getViolence().getClass().getName()));
+        if (categorie.isViolence()) {
+            tags.add(AuditTagEnum.parseOfNullable("Violence"));
             auditResponse.setViolence(1);
         }
 
         return tags;
     }
 
+
+
     public List<AuditResultRsp> getAuditResult(Long userId) {
-        List<TdAuditResult> auditResultList = tdAuditResultService.lambdaQuery()
-                .eq(TdAuditResult::getUserId, userId)
-                .list();
+        // Fetch results using the service
+        List<TdAuditResult> auditResultList = tdAuditResultService.getAuditResultsByUserId(userId);
 
         List<AuditResultRsp> auditResultRspList = new ArrayList<>();
 
         for (TdAuditResult auditResult : auditResultList) {
             AuditResultRsp auditResultRsp = new AuditResultRsp();
-
             auditResultRsp.setTags(this.getTagsEnum(auditResult.getTags()));
-
             auditResultRsp.setInput(auditResult.getInput());
-
             auditResultRspList.add(auditResultRsp);
         }
 
         return auditResultRspList;
     }
+
 
     private List<AuditTagEnum> getTagsEnum(String tagsStr) {
         List<String> tagList = Arrays.asList(tagsStr.split(","));
@@ -181,12 +215,12 @@ public class AuditService {
         auditResponse.setSexualScore(categoryScore.getSexual());
         auditResponse.setHateScore(categoryScore.getHate());
         auditResponse.setHarassmentScore(categoryScore.getHarassment());
-        auditResponse.setSelfharmScore(categoryScore.getSelfHarm());
+        auditResponse.setSelfHarmScore(categoryScore.getSelfHarm());
         auditResponse.setSexualMinorsScore(categoryScore.getSexualMinors());
         auditResponse.setHateThreateningScore(categoryScore.getHateThreatening());
         auditResponse.setViolenceGraphicScore(categoryScore.getViolenceGraphic());
-        auditResponse.setSelfharmIntentScore(categoryScore.getSelfHarmIntent());
-        auditResponse.setSelfharmInstructionsScore(categoryScore.getSelfHarmInstructions());
+        auditResponse.setSelfHarmIntentScore(categoryScore.getSelfHarmIntent());
+        auditResponse.setSelfHarmInstructionsScore(categoryScore.getSelfHarmInstructions());
         auditResponse.setHarassmentThreateningScore(categoryScore.getHarassmentThreatening());
         auditResponse.setViolenceScore(categoryScore.getViolence());
     }
